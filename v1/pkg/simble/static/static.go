@@ -22,12 +22,13 @@ import (
 	echo2 "github.com/labstack/echo"
 	"io/ioutil"
 	"net/http"
-	"path/filepath"
 	"path"
+	"path/filepath"
 	"strings"
 )
 
 type StaticContext struct {
+	IncludeHiddenFiles bool
 	URLPath string
 	DirPath string
 	AssetFS *assetfs.AssetFS
@@ -43,29 +44,32 @@ func init() {
 			if (static.AssetFS == nil) {
 				static.AssetFS = DefaultAssetFS
 			}
-			if (static.DirPath != "") {
-				ctx.Echo.Logger.Info("Serving static content from: ", static.DirPath)
-				createStaticRoutes(ctx.Echo, static.DirPath, static.DirPath)
-			}
 			if (static.AssetFS != nil) {
 				ctx.Echo.Logger.Info("Serving static content from embedded resources")
 				handler := echo2.WrapHandler(http.FileServer(static.AssetFS))
 				ctx.Echo.GET(path.Join(static.URLPath, "*"), handler)
+			}
+			if (static.DirPath != "") {
+				ctx.Echo.Logger.Info("Serving static content from: ", static.DirPath)
+				static.createStaticRoutes(ctx.Echo, static.DirPath, static.DirPath)
 			}
 		}
 		return nil
 	})
 }
 
-func createStaticRoutes(echo *echo2.Echo, prefix string, directory string) error {
+func (static *StaticContext) createStaticRoutes(echo *echo2.Echo, prefix string, directory string) error {
 	infos, err := ioutil.ReadDir(directory)
 	if err!=nil {
 		return err
 	}
 	for _, info := range infos {
+		if !static.IncludeHiddenFiles && strings.HasPrefix(info.Name(), ".") {
+			continue
+		}
 		path := filepath.Join(directory, info.Name())
 		if info.IsDir() {
-			createStaticRoutes(echo, prefix, path)
+			static.createStaticRoutes(echo, prefix, path)
 		} else {
 			urlpath := strings.TrimPrefix(path, prefix)
 			echo.File(urlpath, path)
