@@ -1,0 +1,24 @@
+# IDEs and editors
+/.idea
+.idea
+*.iml
+*.ipr
+*.iws
+.project
+.classpath
+*.launch
+.settings/
+.vscode/
+.checkstyle
+.factorypath
+.sts4-cache/
+
+# System Files
+.DS_Store
+Thumbs.db
+
+# Build generated files
+node_modules
+target
+ui/bin
+ui/node
