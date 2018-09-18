@@ -21,6 +21,7 @@ import (
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/middleware"
 	"github.com/labstack/gommon/log"
+	"golang.org/x/crypto/acme/autocert"
 )
 
 // These constants help maintain plugin execution order.
@@ -32,19 +33,22 @@ const (
 )
 
 type EchoContext struct {
-	Echo *echo.Echo
-	Port int
-	DisableStart bool
+	Echo            *echo.Echo
+	Port            int
+	DisableStart    bool
+	TLSPort         int
+	TLSAutoCertsDir string
 }
 
 func init() {
 
-	simble.AddPlugin(InitEchoPhase,  func(server *simble.Simble) (error) {
+	simble.AddPlugin(InitEchoPhase, func(server *simble.Simble) (error) {
 		ctx, found := server.Context(&EchoContext{}).(*EchoContext);
 		if !found {
 			ctx = &EchoContext{}
 			server.AddContext(ctx)
 		}
+
 		ctx.Echo = echo.New()
 		ctx.Echo.Logger.SetLevel(log.INFO)
 		(ctx.Echo.Logger).(*log.Logger).SetHeader("${time_rfc3339}")
@@ -66,7 +70,18 @@ func init() {
 		if ctx.DisableStart {
 			return nil
 		}
-		return ctx.Echo.Start(fmt.Sprintf(":%d", ctx.Port))
+
+		if (ctx.TLSAutoCertsDir != "") {
+			if (ctx.TLSPort <= 0) {
+				ctx.TLSPort = 3443
+			}
+			ctx.Echo.AutoTLSManager.Cache = autocert.DirCache(ctx.TLSAutoCertsDir)
+			ctx.Echo.Logger.Printf("Accepting https connection on port: %d", ctx.TLSPort)
+			return ctx.Echo.StartAutoTLS(fmt.Sprintf(":%d", ctx.TLSPort))
+		} else {
+			ctx.Echo.Logger.Printf("Accepting http connection on port: %d", ctx.Port)
+			return ctx.Echo.Start(fmt.Sprintf(":%d", ctx.Port))
+		}
 	})
 
 }

@@ -26,13 +26,17 @@ import (
 func init() {
 
 	// Define the command options.
-	Command.Flags().Int("port", 3000, "The port the server accepts connections on")
-	Command.Flags().String("path", "", "The directory path to serve files from")
-	Command.Flags().String("prefix", "/", "The URL prefix to serve from")
+	Command.Flags().Int("port", 3000, "The port the server accepts connections on.")
+	Command.Flags().String("path", "", "The directory path to serve files from.")
+	Command.Flags().String("prefix", "/", "The URL prefix to serve from.")
 	Command.Flags().Bool("spa", false, "Run in Single Page App mode.")
-	Command.Flags().Bool("etags", false, "Calculate ETag headers to assist caching")
+	Command.Flags().Bool("etags", false, "Calculate ETag headers to assist caching.")
+	Command.Flags().String("tls-auto-certs", "", "The directory that will be used to hold tls certificates, must be set to enable TLS.")
+	Command.Flags().Int("tls-port", 3443, "The port the server accepts TLS connections on.")
 
 	// Support using env vars to configure command options.
+	viper.BindPFlag("tls-auto-certs", Command.Flags().Lookup("tls-auto-certs"))
+	viper.BindPFlag("tls-port", Command.Flags().Lookup("tls-port"))
 	viper.BindPFlag("port", Command.Flags().Lookup("port"))
 	viper.BindPFlag("path", Command.Flags().Lookup("path"))
 	viper.BindPFlag("prefix", Command.Flags().Lookup("prefix"))
@@ -49,7 +53,9 @@ var (
 		RunE: func(cmd *cobra.Command, args []string) error {
 			server := simble.New()
 			server.AddContext(&echo.EchoContext{
-				Port: viper.GetInt("port"),
+				Port:            viper.GetInt("port"),
+				TLSPort:         viper.GetInt("tls-port"),
+				TLSAutoCertsDir: viper.GetString("tls-auto-certs"),
 			})
 			server.AddContext(&static.StaticContext{
 				URLPath: viper.GetString("prefix"),
