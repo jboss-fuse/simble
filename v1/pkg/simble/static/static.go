@@ -142,7 +142,6 @@ func (fsList *FileSystemList) eTagHandler(next echo.HandlerFunc) echo.HandlerFun
 		}
 
 		etag := fmt.Sprintf("%x-%x", sum.Sum(nil), info.ModTime().Unix())
-		fmt.Println(`setting the etag header`)
 		res.Header().Set("Etag", etag)
 
 		ifNoneMatch := c.Request().Header.Get("If-None-Match")
