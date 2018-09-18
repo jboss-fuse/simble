@@ -29,11 +29,15 @@ func init() {
 	Command.Flags().Int("port", 3000, "The port the server accepts connections on")
 	Command.Flags().String("path", "", "The directory path to serve files from")
 	Command.Flags().String("prefix", "/", "The URL prefix to serve from")
+	Command.Flags().Bool("spa", true, "Run in Single Page App mode.")
+	Command.Flags().Bool("etags", true, "Calculate ETag headers to assist caching")
 
 	// Support using env vars to configure command options.
 	viper.BindPFlag("port", Command.Flags().Lookup("port"))
 	viper.BindPFlag("path", Command.Flags().Lookup("path"))
 	viper.BindPFlag("prefix", Command.Flags().Lookup("prefix"))
+	viper.BindPFlag("spa", Command.Flags().Lookup("spa"))
+	viper.BindPFlag("etags", Command.Flags().Lookup("etags"))
 	viper.SetEnvPrefix(Command.Use)
 	viper.AutomaticEnv()
 }
@@ -50,6 +54,8 @@ var (
 			server.AddContext(&static.StaticContext{
 				URLPath: viper.GetString("prefix"),
 				DirPath: viper.GetString("path"),
+				SinglePageAppMode: viper.GetBool("spa"),
+				ETags: viper.GetBool("etags"),
 			})
 			return server.Run();
 		},

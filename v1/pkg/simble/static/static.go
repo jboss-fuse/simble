@@ -16,64 +16,141 @@
 package static
 
 import (
+	"crypto/sha1"
+	"fmt"
 	"github.com/elazarl/go-bindata-assetfs"
 	"github.com/jboss-fuse/simble/v1/pkg/simble"
-	"github.com/jboss-fuse/simble/v1/pkg/simble/echo"
-	echo2 "github.com/labstack/echo"
-	"io/ioutil"
+	simecho "github.com/jboss-fuse/simble/v1/pkg/simble/echo"
+	"github.com/labstack/echo"
+	"io"
 	"net/http"
 	"path"
-	"path/filepath"
 	"strings"
 )
 
 type StaticContext struct {
 	IncludeHiddenFiles bool
-	URLPath string
-	DirPath string
-	AssetFS *assetfs.AssetFS
+	URLPath            string
+	DirPath            string
+	AssetFS            *assetfs.AssetFS
+	SinglePageAppMode  bool
+	ETags			   bool
 }
 
 var DefaultAssetFS *assetfs.AssetFS = nil
 
+type FileSystemList []http.FileSystem
+
+func (this FileSystemList) Open(name string) (http.File, error) {
+	var lastError error = nil
+	for _, fs := range this {
+		file, err := fs.Open(name)
+		lastError = err
+		if (err == nil) {
+			return file, nil
+		}
+	}
+	return nil, lastError
+}
+
 func init() {
-	simble.AddPlugin(echo.InitEchoRoutesPhase, func(server *simble.Simble) (error) {
+	simble.AddPlugin(simecho.InitEchoRoutesPhase, func(server *simble.Simble) (error) {
 		static, found := server.Context(&StaticContext{}).(*StaticContext);
 		if (found) {
-			ctx := server.Context(&echo.EchoContext{}).(*echo.EchoContext);
-			if (static.AssetFS == nil) {
+			ctx := server.Context(&simecho.EchoContext{}).(*simecho.EchoContext);
+			if static.AssetFS == nil {
 				static.AssetFS = DefaultAssetFS
 			}
-			if (static.AssetFS != nil) {
-				ctx.Echo.Logger.Info("Serving static content from embedded resources")
-				handler := echo2.WrapHandler(http.FileServer(static.AssetFS))
-				ctx.Echo.GET(path.Join(static.URLPath, "*"), handler)
-			}
-			if (static.DirPath != "") {
+			fsList := FileSystemList{}
+			if static.DirPath != "" {
 				ctx.Echo.Logger.Info("Serving static content from: ", static.DirPath)
-				static.createStaticRoutes(ctx.Echo, static.DirPath, static.DirPath)
+				fsList = append(fsList, http.Dir(static.DirPath))
+			}
+			if static.AssetFS != nil {
+				ctx.Echo.Logger.Info("Serving static content from embedded resources")
+				fsList = append(fsList, static.AssetFS)
+			}
+			if (len(fsList) > 0) {
+				if static.SinglePageAppMode {
+					ctx.Echo.Use(fsList.singlePageAppHandler)
+				}
+				if static.ETags {
+					ctx.Echo.Use(fsList.eTagHandler)
+				}
+				handler := echo.WrapHandler(http.FileServer(fsList))
+				ctx.Echo.GET(path.Join(static.URLPath, "*"), handler)
 			}
 		}
 		return nil
 	})
 }
 
-func (static *StaticContext) createStaticRoutes(echo *echo2.Echo, prefix string, directory string) error {
-	infos, err := ioutil.ReadDir(directory)
+func (fsList *FileSystemList) singlePageAppHandler(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		url := c.Request().URL
+		asset := strings.TrimPrefix(url.Path, "/")
+		if !fsList.canServe(asset) {
+			// the static content handler redirects /index.html to /
+			// so rewrite to / to avoid a redirect.
+			url.Path = "/"
+		}
+		return next(c)
+	}
+}
+
+func (fsList *FileSystemList) canServe(asset string) bool {
+	file, err := fsList.Open(asset)
+	if  err!=nil {
+		return false
+	}
+	defer file.Close()
+	info, err := file.Stat()
 	if err!=nil {
-		return err
+		return false
 	}
-	for _, info := range infos {
-		if !static.IncludeHiddenFiles && strings.HasPrefix(info.Name(), ".") {
-			continue
-		}
-		path := filepath.Join(directory, info.Name())
-		if info.IsDir() {
-			static.createStaticRoutes(echo, prefix, path)
-		} else {
-			urlpath := strings.TrimPrefix(path, prefix)
-			echo.File(urlpath, path)
-		}
+	if( info.IsDir() ) {
+		return fsList.canServe(path.Join(asset, "index.html"))
 	}
-	return nil
+	return true
+}
+
+func (fsList *FileSystemList) eTagHandler(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		url := c.Request().URL
+		res := c.Response()
+		asset := strings.TrimPrefix(url.Path, "/")
+
+		if (asset == "") {
+			asset = "index.html"
+		}
+
+		file, err := fsList.Open(asset)
+		if err!=nil {
+			return next(c)
+		}
+		defer file.Close()
+
+		info, err := file.Stat();
+		if err!=nil {
+			return next(c)
+		}
+
+		sum := sha1.New()
+		_, err = io.Copy(sum, file)
+		if err!=nil {
+			return next(c)
+		}
+
+		etag := fmt.Sprintf("%x-%x", sum.Sum(nil), info.ModTime().Unix())
+		fmt.Println(`setting the etag header`)
+		res.Header().Set("Etag", etag)
+
+		ifNoneMatch := c.Request().Header.Get("If-None-Match")
+		if ifNoneMatch == etag {
+			c.NoContent(http.StatusNotModified)
+			return nil;
+		}
+
+		return next(c)
+	}
 }
