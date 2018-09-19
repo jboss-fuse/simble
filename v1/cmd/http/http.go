@@ -45,7 +45,7 @@ func init() {
 	viper.BindPFlag("tls-port", Command.Flags().Lookup("tls-port"))
 
 	Command.Flags().String("tls-lets-encrypt", "", "The directory used to cache letsencrypt.org certificates. Enables TLS.")
-	viper.BindPFlag("tls-lets-encrypt", Command.Flags().Lookup("tls-auto-certs"))
+	viper.BindPFlag("tls-lets-encrypt", Command.Flags().Lookup("tls-lets-encrypt"))
 
 	Command.Flags().String("tls-key", "", "The TLS private key file. Enables TLS.")
 	viper.BindPFlag("tls-key", Command.Flags().Lookup("tls-key"))
