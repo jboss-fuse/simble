@@ -33,11 +33,13 @@ const (
 )
 
 type EchoContext struct {
-	Echo            *echo.Echo
-	Port            int
-	DisableStart    bool
-	TLSPort         int
-	TLSAutoCertsDir string
+	Echo              *echo.Echo
+	Port              int
+	DisableStart      bool
+	TLSPort           int
+	TLSLetsEncryptDir string
+	TLSCertFile       string
+	TLSKeyFile        string
 }
 
 func init() {
@@ -71,17 +73,58 @@ func init() {
 			return nil
 		}
 
-		if (ctx.TLSAutoCertsDir != "") {
-			if (ctx.TLSPort <= 0) {
-				ctx.TLSPort = 3443
-			}
-			ctx.Echo.AutoTLSManager.Cache = autocert.DirCache(ctx.TLSAutoCertsDir)
-			ctx.Echo.Logger.Printf("Accepting https connection on port: %d", ctx.TLSPort)
-			return ctx.Echo.StartAutoTLS(fmt.Sprintf(":%d", ctx.TLSPort))
-		} else {
-			ctx.Echo.Logger.Printf("Accepting http connection on port: %d", ctx.Port)
-			return ctx.Echo.Start(fmt.Sprintf(":%d", ctx.Port))
+		// do some option validation...
+		if (ctx.TLSCertFile == "" && ctx.TLSKeyFile != "") {
+			return fmt.Errorf("TLSCertFile must be configured if TLSKeyFile is configured" )
 		}
+		if (ctx.TLSCertFile != "" && ctx.TLSKeyFile == "") {
+			return fmt.Errorf("TLSKeyFile must be configured if TLSCertFile is configured" )
+		}
+		if (ctx.TLSLetsEncryptDir != "" || ctx.TLSKeyFile != "") {
+			return fmt.Errorf("TLSLetsEncryptDir cannot be configured if TLSCertFile is configured" )
+		}
+
+		if (ctx.TLSPort <= 0) {
+			ctx.TLSPort = 3443
+		}
+
+		// Used to track results of running each listener async...
+		errors := []chan error{}
+
+		if (ctx.TLSLetsEncryptDir != "") {
+			channel := make(chan error, 1)
+			errors = append(errors, channel)
+			go func(){
+				ctx.Echo.AutoTLSManager.Cache = autocert.DirCache(ctx.TLSLetsEncryptDir)
+				ctx.Echo.Logger.Printf("Accepting https connection on port: %d", ctx.TLSPort)
+				channel <- ctx.Echo.StartAutoTLS(fmt.Sprintf(":%d", ctx.TLSPort))
+			}()
+		}
+
+		if (ctx.TLSCertFile != "") {
+			channel := make(chan error, 1)
+			errors = append(errors, channel)
+			go func(){
+				ctx.Echo.Logger.Printf("Accepting https connection on port: %d", ctx.TLSPort)
+				channel <- ctx.Echo.StartTLS(fmt.Sprintf(":%d", ctx.TLSPort), ctx.TLSCertFile, ctx.TLSKeyFile)
+			}()
+		}
+
+		channel := make(chan error, 1)
+		errors = append(errors, channel)
+		go func(){
+			ctx.Echo.Logger.Printf("Accepting http connection on port: %d", ctx.Port)
+			channel <-  ctx.Echo.Start(fmt.Sprintf(":%d", ctx.Port))
+		}()
+
+		for _, channel := range errors {
+			err := <- channel
+			if err !=nil {
+				return err
+			}
+		}
+		return nil
+
 	})
 
 }
