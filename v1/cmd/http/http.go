@@ -26,38 +26,20 @@ import (
 func init() {
 
 	// Define the command options.
-	Command.Flags().Int("port", 3000, "The port the server accepts connections on.")
-	viper.BindPFlag("port", Command.Flags().Lookup("port"))
-
-	Command.Flags().String("path", "", "The directory path to serve files from.")
-	viper.BindPFlag("path", Command.Flags().Lookup("path"))
-
-	Command.Flags().String("prefix", "/", "The URL prefix to serve from.")
-	viper.BindPFlag("prefix", Command.Flags().Lookup("prefix"))
-
-	Command.Flags().Bool("spa", false, "Run in Single Page App mode.")
-	viper.BindPFlag("spa", Command.Flags().Lookup("spa"))
-
-	Command.Flags().Bool("etags", false, "Calculate ETag headers to assist caching.")
-	viper.BindPFlag("etags", Command.Flags().Lookup("etags"))
-
-	Command.Flags().Int("tls-port", 3443, "The port the server accepts TLS connections on.")
-	viper.BindPFlag("tls-port", Command.Flags().Lookup("tls-port"))
-
-	Command.Flags().String("tls-lets-encrypt", "", "The directory used to cache letsencrypt.org certificates. Enables TLS.")
-	viper.BindPFlag("tls-lets-encrypt", Command.Flags().Lookup("tls-lets-encrypt"))
-
-	Command.Flags().String("tls-key", "", "The TLS private key file. Enables TLS.")
-	viper.BindPFlag("tls-key", Command.Flags().Lookup("tls-key"))
-
-	Command.Flags().String("tls-cert", "", "The TLS certificate file. Enables TLS.")
-	viper.BindPFlag("tls-cert", Command.Flags().Lookup("tls-cert"))
+	addIntFlag("port", 3000, "The port the server accepts connections on.")
+	addStringFlag("path", "", "The directory path to serve files from.")
+	addStringFlag("prefix", "/", "The URL prefix to serve content from.")
+	addBoolFlag("spa", false, "Run in Single Page App mode.")
+	addBoolFlag("etags", false, "Calculate ETag headers to assist caching.")
+	addIntFlag("tls-port", 3443, "The port the server accepts TLS connections on.")
+	addStringFlag("tls-lets-encrypt", "", "The directory used to cache letsencrypt.org certificates. Enables TLS.")
+	addStringFlag("tls-key", "", "The TLS private key file. Enables TLS.")
+	addStringFlag("tls-cert", "", "The TLS certificate file. Enables TLS.")
 
 	// Support using env vars to configure command options.
 	viper.SetEnvPrefix(Command.Use)
 	viper.AutomaticEnv()
 }
-
 var (
 	Command = &cobra.Command{
 		Use: "http",
@@ -81,3 +63,17 @@ var (
 		},
 	}
 )
+
+
+func addStringFlag(flagName string, defaultValue string, description string) {
+	Command.Flags().String(flagName, defaultValue, description)
+	viper.BindPFlag(flagName, Command.Flags().Lookup(flagName))
+}
+func addIntFlag(flagName string, defaultValue int, description string) {
+	Command.Flags().Int(flagName, defaultValue, description)
+	viper.BindPFlag(flagName, Command.Flags().Lookup(flagName))
+}
+func addBoolFlag(flagName string, defaultValue bool, description string) {
+	Command.Flags().Bool(flagName, defaultValue, description)
+	viper.BindPFlag(flagName, Command.Flags().Lookup(flagName))
+}

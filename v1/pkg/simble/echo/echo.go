@@ -80,7 +80,7 @@ func init() {
 		if (ctx.TLSCertFile != "" && ctx.TLSKeyFile == "") {
 			return fmt.Errorf("TLSKeyFile must be configured if TLSCertFile is configured" )
 		}
-		if (ctx.TLSLetsEncryptDir != "" || ctx.TLSKeyFile != "") {
+		if (ctx.TLSLetsEncryptDir != "" && ctx.TLSKeyFile != "") {
 			return fmt.Errorf("TLSLetsEncryptDir cannot be configured if TLSCertFile is configured" )
 		}
 
